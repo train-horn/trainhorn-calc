@@ -1,0 +1,204 @@
+---
+title: Acoustics
+description: SPL versus distance for a horn in open air - the inverse-square law, 6.02 dB per doubling, reference distance and air absorption.
+---
+
+Module: `trainhorn_calc.acoustics`. CLI: `spl`, `distance`, `doubling`, `combine`.
+
+## The inverse-square law
+
+Treat the horn as a small (point) source radiating into open air. Its acoustic
+power `W` spreads over a sphere of area `4πr²`, so the intensity at distance
+`r` is
+
+```text
+I(r) = W / (4π r²)
+```
+
+Sound pressure level is a log ratio of intensities, `L = 10·log10(I / I0)`.
+Comparing two distances `d_ref` and `d`:
+
+```text
+L(d) - L(d_ref) = 10·log10( I(d) / I(d_ref) )
+                = 10·log10( d_ref² / d² )
+                = -20·log10( d / d_ref )
+```
+
+So the library uses
+
+```text
+L(d) = L_ref - 20·log10(d / d_ref) - a·(d - d_ref) / 1000
+```
+
+where `L_ref` is the level at the reference distance `d_ref` and `a` is an
+optional air absorption coefficient in dB/km (the distances are converted to
+metres for that term). With `a = 0` (the default) this is the pure
+inverse-square law.
+
+## 6.02 dB per doubling of distance
+
+Put `d = 2·d_ref` into the formula: the loss is `20·log10(2)`.
+
+```console
+$ trainhorn-calc doubling
+6.02 dB lost per doubling of distance (free field)
+
+$ trainhorn-calc doubling --json
+{
+  "db_per_doubling": 6.020599913279624
+}
+```
+
+The same rule gives 20 dB for every tenfold increase in distance
+(`distance_ratio_loss(10)` returns `20.0`). A 150 dB horn (rated at 10 ft)
+falls like this:
+
+| Distance (ft) | 10 | 20 | 40 | 80 | 160 | 320 | 640 | 1280 | 2560 | 5120 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| SPL (dB) | 150.00 | 143.98 | 137.96 | 131.94 | 125.92 | 119.90 | 113.88 | 107.86 | 101.84 | 95.81 |
+
+Values from `round(spl_at_distance(150, d), 2)`.
+
+## Reference distance
+
+A dB figure without a distance is meaningless. Horn makers quote levels "at
+10 ft", "at 1 m" or sometimes "at 3 ft", and the same horn gives very
+different numbers at each. The library's default reference distance is 10 ft;
+pass `ref_distance` (`--ref-distance`) and `unit` (`--unit ft|m`) to match the
+rating you have.
+
+```console
+$ trainhorn-calc spl 120 50 --ref-distance 1 --unit m
+86.0 dB at 50 m
+
+$ trainhorn-calc spl 120 3.048 --ref-distance 1 --unit m
+110.3 dB at 3.048 m
+```
+
+So a horn rated 120 dB at 1 m is only about 110.3 dB at 10 ft (3.048 m):
+`distance_ratio_loss(3.048)` is 9.68 dB. Always convert to one reference
+distance before you compare two horns.
+
+## Worked examples
+
+### Level at a distance
+
+A horn kit rated 150 dB at 10 ft:
+
+```console
+$ trainhorn-calc spl 150 100
+130.0 dB at 100 ft
+
+$ trainhorn-calc spl 150 1000
+110.0 dB at 1000 ft
+
+$ trainhorn-calc spl 150 5280
+95.5 dB at 5280 ft
+```
+
+Each tenfold step in distance removes 20 dB. At one mile (5280 ft) the free
+field model gives about 95.5 dB.
+
+### Adding air absorption
+
+Train horn chords sit mostly between about 250 and 600 Hz. At 500 Hz,
+absorption is about 1.9 dB/km at 10 °C and 70 % relative humidity:
+
+```console
+$ trainhorn-calc spl 150 5280 --absorption 1.9
+92.5 dB at 5280 ft
+
+$ trainhorn-calc spl 120 50 --ref-distance 1 --unit m --absorption 1.9
+85.9 dB at 50 m
+```
+
+Absorption costs about 3 dB at one mile but only 0.1 dB at 50 m: it matters at
+long range only. The library ships rounded octave-band values in
+`AIR_ABSORPTION_DB_PER_KM`:
+
+| Octave band (Hz) | 63 | 125 | 250 | 500 | 1000 | 2000 | 4000 | 8000 |
+|---|---|---|---|---|---|---|---|---|
+| dB/km | 0.1 | 0.4 | 1.0 | 1.9 | 3.7 | 9.7 | 32.8 | 117.0 |
+
+These are typical figures for 10 °C and 70 % RH (a condition tabulated in
+ISO 9613-2, computed from the ISO 9613-1 equations). They change a lot with
+temperature and humidity.
+
+### Distance for a target level
+
+The inverse problem: where does the 150 dB (at 10 ft) horn fall to 90 dB?
+
+```console
+$ trainhorn-calc distance 150 90
+90 dB is reached at about 10,000.0 ft
+
+$ trainhorn-calc distance 150 90 --absorption 1.9
+90 dB is reached at about 6,491.3 ft
+
+$ trainhorn-calc distance 120 85 --ref-distance 1 --unit m
+85 dB is reached at about 56.2 m
+```
+
+Without absorption the closed form is `d = d_ref·10^((L_ref - L)/20)`. With
+absorption there is no elementary closed form, so `distance_for_spl` solves it
+by bisection; the level falls strictly with distance, so the root is unique.
+
+### Two or more horns
+
+Levels of independent (incoherent) sources add as powers, not as decibels:
+
+```text
+L = 10·log10( Σ 10^(L_i / 10) )
+```
+
+```console
+$ trainhorn-calc combine 150 150
+153.0 dB combined
+
+$ trainhorn-calc combine 150 147
+151.8 dB combined
+
+$ trainhorn-calc combine 118 118 118
+122.8 dB combined
+```
+
+Two equal horns add about 3 dB, three add about 4.8 dB.
+
+## Python API
+
+```python
+from trainhorn_calc import (
+    spl_at_distance, distance_for_spl, db_doubling_loss,
+    distance_ratio_loss, combine_levels,
+)
+
+spl_at_distance(150, 100)                                    # 130.0
+spl_at_distance(150, 5280, absorption_db_per_km=1.9)         # 92.49535914932376
+spl_at_distance(120, 50, ref_distance=1, unit="m",
+                absorption_db_per_km=1.9)                    # 85.92749991327962
+distance_for_spl(150, 90)                                    # 10000.0
+distance_for_spl(150, 90, absorption_db_per_km=1.9)          # 6491.256148481227
+db_doubling_loss()                                           # 6.020599913279624
+distance_ratio_loss(10)                                      # 20.0
+combine_levels([150, 150])                                   # 153.0102999566398
+```
+
+## Limitations
+
+- **Free field only.** No ground reflection, buildings, barriers, wind or
+  temperature gradients. Real outdoor levels can be several dB higher or lower
+  than the model, and more so at long range.
+- **Point source.** Very close to the horn (within about one or two horn
+  lengths) the law does not hold. The formula still returns a number
+  (`spl_at_distance(150, 5)` gives 156.0), but treat anything inside the rated
+  distance as unreliable.
+- **Ratings vary.** Published horn dB figures are often peak values measured
+  under conditions you cannot check. The output can only be as good as the
+  input.
+- **Not a measurement or a legal assessment.** Use a calibrated sound level
+  meter for real numbers and check local noise rules separately.
+
+## Try it in the browser
+
+The [decibel distance calculator](https://train-horn.com/tools/decibel-distance/)
+on train-horn.com runs the same inverse-square model in a web page.

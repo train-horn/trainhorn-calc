@@ -93,13 +93,13 @@ python -m unittest discover -s tests -v
 
 49 tests (unittest plus the docstring examples): known values, inverse round-trips, CLI output and edge cases. No pytest required.
 
-## Building the conda package
+## Conda package
 
-```bash
-python3 conda/build_conda.py      # runs the tests, then writes dist/trainhorn-calc-<ver>-py_0.tar.bz2
-```
+The package on the anaconda.org `trainhorn` channel is a standard `noarch: python` build of this source. Its build script and recipe are not part of this repository; to use the library from a checkout, run `pip install .`.
 
-The script assembles a standard `noarch: python` package without conda-build. `conda/meta.yaml` is the equivalent recipe for `conda build conda/`.
+## Documentation
+
+Full documentation with derivations and worked examples: https://docs.page/train-horn/trainhorn-calc
 
 ## Related
 

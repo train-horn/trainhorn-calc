@@ -1,0 +1,123 @@
+---
+title: trainhorn-calc
+description: Dependency-free Python calculators for planning a vehicle train horn setup.
+---
+
+`trainhorn-calc` is a small Python library and command-line tool for the three
+questions that come up when you plan an onboard air horn:
+
+- **How loud is it over there?** Sound pressure level (SPL) at a distance from a
+  rated level, with the inverse-square law and optional air absorption.
+- **How long will the tank last, and how long to refill it?** Horn runtime and
+  compressor recovery from Boyle's law (free-air volume).
+- **What wire do I need?** The smallest copper AWG size that keeps a 12 V or
+  24 V run within a voltage-drop budget.
+
+It is pure Python 3.8+, has no dependencies, ships type hints (`py.typed`) and
+is MIT licensed. Every number on these pages was produced by running version
+1.0.0 of the library.
+
+<Warning>
+Results are engineering estimates from simple physical models. They are not
+measurements, and they are not legal advice about horn use. Check your state
+and local rules before you sound a horn on a public road.
+</Warning>
+
+## Install
+
+From the anaconda.org user channel:
+
+```bash
+conda install -c trainhorn trainhorn-calc
+```
+
+From a source checkout of this repository:
+
+```bash
+git clone https://github.com/train-horn/trainhorn-calc.git
+cd trainhorn-calc
+pip install .
+```
+
+Check the install:
+
+```console
+$ trainhorn-calc --version
+trainhorn-calc 1.0.0
+```
+
+`python -m trainhorn_calc` runs the same command if the script directory is not
+on your `PATH`.
+
+## Quick start
+
+### Command line
+
+```console
+$ trainhorn-calc spl 150 100
+130.0 dB at 100 ft
+
+$ trainhorn-calc runtime 5 150 110 10 --blast 2
+10.9 s of horn time (1.82 cu ft of free air); 5 blasts of 2 s
+
+$ trainhorn-calc wire 30 10
+6 AWG copper: 0.24 V drop (1.98% of 12 V, limit 3%)
+```
+
+Read these as: a horn rated 150 dB at 10 ft gives about 130 dB at 100 ft; a
+5-gallon tank going from 150 to 110 psi feeds a 10 CFM horn for about 10.9 s;
+a 30 A load 10 ft from the battery needs 6 AWG copper to stay under a 3 % drop
+at 12 V.
+
+### Python
+
+```python
+from trainhorn_calc import (
+    spl_at_distance, distance_for_spl, tank_runtime_seconds,
+    blast_count, compressor_recovery_seconds, suggest_awg,
+)
+
+spl_at_distance(150, 100)                         # 130.0
+distance_for_spl(150, 130)                        # 100.0
+secs = tank_runtime_seconds(5, 150, 110, 10)      # 10.91566866267465
+blast_count(secs, 2)                              # 5
+compressor_recovery_seconds(2, 110, 150, 1.0)     # 43.662674650698605
+suggest_awg(30, 10).awg                           # '6'
+```
+
+All functions raise `trainhorn_calc.InputError` (a subclass of `ValueError`)
+with a clear message for bad input, for example:
+
+```python
+from trainhorn_calc import InputError
+
+try:
+    tank_runtime_seconds(5, 100, 110, 10)
+except InputError as exc:
+    print(exc)
+# start_psi (100 psi) must be greater than cutoff_psi (110 psi)
+```
+
+## What is in the package
+
+| Module | Main functions | Page |
+|---|---|---|
+| `trainhorn_calc.acoustics` | `spl_at_distance`, `distance_for_spl`, `db_doubling_loss`, `distance_ratio_loss`, `combine_levels` | [Acoustics](/acoustics) |
+| `trainhorn_calc.airsystem` | `free_air_volume_cuft`, `tank_runtime_seconds`, `blast_count`, `compressor_recovery_seconds` | [Air system](/air-system) |
+| `trainhorn_calc.electrical` | `suggest_awg`, `voltage_drop`, `awg_resistance_ohm_per_1000ft` | [Wiring](/wiring) |
+| `trainhorn_calc.cli` | the `trainhorn-calc` command | [Command line](/cli) |
+
+## Tests
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+49 tests (unittest plus the docstring examples) cover known values, inverse
+round-trips, CLI output and edge cases. No pytest is needed.
+
+## Related
+
+The same calculators run in the browser on
+[train-horn.com](https://train-horn.com/tools/), an independent reference on
+train horns.

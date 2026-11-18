@@ -1,0 +1,28 @@
+{
+  "$schema": "https://docs.page/schema.json",
+  "name": "trainhorn-calc",
+  "description": "Dependency-free Python calculators for train horn setups: SPL vs distance, air tank runtime, compressor recovery and copper wire gauge.",
+  "social": {
+    "github": "train-horn/trainhorn-calc"
+  },
+  "content": {
+    "showPageTitle": true
+  },
+  "sidebar": [
+    {
+      "group": "Getting started",
+      "pages": [
+        { "title": "Overview", "href": "/" },
+        { "title": "Command line", "href": "/cli" }
+      ]
+    },
+    {
+      "group": "Models",
+      "pages": [
+        { "title": "Acoustics", "href": "/acoustics" },
+        { "title": "Air system", "href": "/air-system" },
+        { "title": "Wiring", "href": "/wiring" }
+      ]
+    }
+  ]
+}

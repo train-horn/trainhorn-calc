@@ -1,0 +1,268 @@
+---
+title: Command line
+description: Every trainhorn-calc subcommand with its arguments, options and real example output.
+---
+
+Installing the package adds a `trainhorn-calc` command. `python -m trainhorn_calc`
+does the same thing.
+
+```console
+$ trainhorn-calc --help
+usage: trainhorn-calc [-h] [--version] COMMAND ...
+
+Train horn calculators: SPL vs distance, air tank runtime, compressor recovery and wire gauge. Web
+versions: https://train-horn.com/tools/
+
+positional arguments:
+  COMMAND
+    spl       SPL at a distance from a rated level
+    distance  distance at which a target SPL is reached
+    doubling  dB lost per doubling of distance
+    combine   combine levels of several horns
+    runtime   air tank horn runtime (Boyle's law)
+    recovery  compressor refill time
+    wire      copper AWG for a voltage-drop budget
+
+optional arguments:
+  -h, --help  show this help message and exit
+  --version   show program's version number and exit
+```
+
+## Common behaviour
+
+- Every subcommand accepts `--json` and then prints a JSON object with
+  unrounded values (keys sorted) instead of the short text line.
+- `trainhorn-calc <subcommand> --help` lists every argument and option.
+- Invalid input prints `error: ...` to stderr and exits with **status 2**:
+
+```console
+$ trainhorn-calc spl 150 -5
+error: distance must be greater than 0, got -5
+
+$ trainhorn-calc runtime 5 100 110 10
+error: start_psi (100 psi) must be greater than cutoff_psi (110 psi)
+```
+
+## Acoustics
+
+The four acoustics subcommands are explained in depth on the
+[Acoustics](/acoustics) page.
+
+### spl
+
+Level at a distance from a rated level.
+
+```text
+trainhorn-calc spl SOURCE_DB DISTANCE [--ref-distance 10] [--unit ft|m] [--absorption DB_PER_KM] [--json]
+```
+
+| Argument / option | Meaning | Default |
+|---|---|---|
+| `SOURCE_DB` | rated level in dB at `--ref-distance` | required |
+| `DISTANCE` | distance to estimate the level at | required |
+| `--ref-distance` | distance of the rated level | 10 |
+| `--unit` | `ft` or `m`, for both distances | `ft` |
+| `--absorption` | air absorption in dB/km | 0 |
+
+```console
+$ trainhorn-calc spl 150 100
+130.0 dB at 100 ft
+
+$ trainhorn-calc spl 150 5280 --absorption 1.9
+92.5 dB at 5280 ft
+
+$ trainhorn-calc spl 120 50 --ref-distance 1 --unit m
+86.0 dB at 50 m
+
+$ trainhorn-calc spl 150 100 --json
+{
+  "distance": 100.0,
+  "spl_db": 130.0,
+  "unit": "ft"
+}
+```
+
+### distance
+
+Distance at which a target level is reached. Same options as `spl`.
+
+```text
+trainhorn-calc distance SOURCE_DB TARGET_DB [--ref-distance 10] [--unit ft|m] [--absorption DB_PER_KM] [--json]
+```
+
+```console
+$ trainhorn-calc distance 150 90
+90 dB is reached at about 10,000.0 ft
+
+$ trainhorn-calc distance 150 90 --absorption 1.9
+90 dB is reached at about 6,491.3 ft
+
+$ trainhorn-calc distance 120 85 --ref-distance 1 --unit m
+85 dB is reached at about 56.2 m
+
+$ trainhorn-calc distance 150 90 --json
+{
+  "distance": 10000.0,
+  "target_db": 90.0,
+  "unit": "ft"
+}
+```
+
+### doubling
+
+Free-field loss per doubling of distance. No arguments.
+
+```console
+$ trainhorn-calc doubling
+6.02 dB lost per doubling of distance (free field)
+
+$ trainhorn-calc doubling --json
+{
+  "db_per_doubling": 6.020599913279624
+}
+```
+
+### combine
+
+Combined level of several incoherent sources (for example two horns).
+
+```text
+trainhorn-calc combine LEVEL [LEVEL ...] [--json]
+```
+
+```console
+$ trainhorn-calc combine 150 150
+153.0 dB combined
+
+$ trainhorn-calc combine 150 147
+151.8 dB combined
+
+$ trainhorn-calc combine 150 150 --json
+{
+  "combined_db": 153.0102999566398
+}
+```
+
+## Air system
+
+Background and assumptions: [Air system](/air-system).
+
+### runtime
+
+Horn time from a full tank down to a cut-off pressure.
+
+```text
+trainhorn-calc runtime TANK_GAL START_PSI CUTOFF_PSI HORN_CFM [--blast SECONDS] [--atm-psi 14.696] [--json]
+```
+
+| Argument / option | Meaning | Default |
+|---|---|---|
+| `TANK_GAL` | tank volume in US gallons | required |
+| `START_PSI` | starting gauge pressure | required |
+| `CUTOFF_PSI` | lowest usable gauge pressure | required |
+| `HORN_CFM` | horn consumption in CFM of free air | required |
+| `--blast` | also count whole blasts of this many seconds | off |
+| `--atm-psi` | ambient pressure in psi | 14.696 |
+
+```console
+$ trainhorn-calc runtime 5 150 110 10 --blast 2
+10.9 s of horn time (1.82 cu ft of free air); 5 blasts of 2 s
+
+$ trainhorn-calc runtime 5 150 110 10 --atm-psi 12.2
+13.1 s of horn time (2.19 cu ft of free air)
+
+$ trainhorn-calc runtime 5 150 110 10 --json
+{
+  "free_air_cuft": 1.8192781104457751,
+  "runtime_seconds": 10.91566866267465
+}
+```
+
+With `--blast` the JSON also has a `blasts` key.
+
+### recovery
+
+Compressor refill time from cut-in to cut-out pressure.
+
+```text
+trainhorn-calc recovery TANK_GAL CUT_IN_PSI CUT_OUT_PSI COMPRESSOR_CFM [--cfm-at-zero CFM --rated-psi PSI] [--atm-psi 14.696] [--json]
+```
+
+| Argument / option | Meaning | Default |
+|---|---|---|
+| `TANK_GAL` | tank volume in US gallons | required |
+| `CUT_IN_PSI` | gauge pressure at which the compressor switches on | required |
+| `CUT_OUT_PSI` | gauge pressure at which it switches off | required |
+| `COMPRESSOR_CFM` | free-air CFM at the rated pressure | required |
+| `--cfm-at-zero` | free-air CFM at 0 psi (linear model) | off |
+| `--rated-psi` | pressure at which `COMPRESSOR_CFM` is rated; needed with `--cfm-at-zero` | off |
+| `--atm-psi` | ambient pressure in psi | 14.696 |
+
+```console
+$ trainhorn-calc recovery 2 110 150 1.0
+43.7 s to refill from 110 to 150 psi
+
+$ trainhorn-calc recovery 2 110 150 1.0 --cfm-at-zero 2.0 --rated-psi 150
+38.7 s to refill from 110 to 150 psi
+
+$ trainhorn-calc recovery 2 110 150 1.0 --json
+{
+  "recovery_seconds": 43.662674650698605
+}
+```
+
+## Wiring
+
+Method, resistance table and limits: [Wiring](/wiring).
+
+### wire
+
+Smallest copper AWG for a voltage-drop budget.
+
+```text
+trainhorn-calc wire AMPS LENGTH [--volts 12] [--max-drop 3] [--unit ft|m] [--temp-c 20] [--json]
+```
+
+| Argument / option | Meaning | Default |
+|---|---|---|
+| `AMPS` | load current in A | required |
+| `LENGTH` | one-way run length | required |
+| `--volts` | system voltage | 12 |
+| `--max-drop` | allowed drop in % | 3 |
+| `--unit` | `ft` or `m` | `ft` |
+| `--temp-c` | conductor temperature in °C | 20 |
+
+```console
+$ trainhorn-calc wire 30 10
+6 AWG copper: 0.24 V drop (1.98% of 12 V, limit 3%)
+
+$ trainhorn-calc wire 20 3 --unit m
+8 AWG copper: 0.25 V drop (2.06% of 12 V, limit 3%)
+
+$ trainhorn-calc wire 30 10 --volts 24 --json
+{
+  "allowed_drop_pct": 3.0,
+  "amps": 30.0,
+  "awg": "10",
+  "one_way_length": 10.0,
+  "system_voltage": 24.0,
+  "unit": "ft",
+  "voltage_drop_pct": 2.4971022738528417,
+  "voltage_drop_v": 0.5993045457246821
+}
+```
+
+## Scripting
+
+`--json` makes the output easy to use from a shell. For example, with `jq`:
+
+```bash
+trainhorn-calc runtime 5 150 110 10 --json | jq .runtime_seconds
+# 10.91566866267465
+```
+
+## Web versions
+
+Browser versions of these calculators (decibel distance, air tank runtime,
+compressor recovery, wire gauge and more) are in the
+[train-horn.com calculators](https://train-horn.com/tools/) section.

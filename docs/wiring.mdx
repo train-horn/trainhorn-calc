@@ -1,0 +1,141 @@
+---
+title: Wiring
+description: Choosing copper AWG for 12 V and 24 V horn and compressor circuits by voltage drop, with the resistance table, its source and a worked 12 V example.
+---
+
+Module: `trainhorn_calc.electrical`. CLI: `wire`.
+
+A horn compressor draws tens of amps at 12 V. Thin wire wastes part of that
+voltage as heat, the compressor slows down and the tank takes longer to fill.
+`suggest_awg` picks the **smallest copper AWG size** whose voltage drop stays
+within a budget (3 % by default).
+
+## The voltage-drop method
+
+Current flows out to the load and back, so the conductor length is **twice the
+one-way run**:
+
+```text
+V_drop = I · R_per_length · 2 · L_one_way
+drop_% = V_drop / V_system · 100
+```
+
+`suggest_awg` walks the common automotive and battery-cable sizes from thin to
+thick (18, 16, 14, 12, 10, 8, 6, 4, 2, 1, 1/0, 2/0, 3/0, 4/0) and returns the
+first one with `drop_% ≤ max_drop_pct`. If even 4/0 cannot meet the budget, it
+raises `InputError`.
+
+<Info>
+A chassis ground return is not free. It is usually worse than a dedicated
+wire, so the library counts both directions as copper.
+</Info>
+
+## Copper resistance table
+
+The resistances are **computed**, not copied from a table:
+
+- **AWG diameter** (ASTM B258): `d(n) = 0.005 in · 92^((36 - n) / 39)`, where
+  1/0, 2/0, 3/0 and 4/0 use n = 0, -1, -2, -3.
+- **Resistivity** of annealed copper at 20 °C, 100 % IACS (International
+  Annealed Copper Standard): `ρ = 1.7241e-8 Ω·m`.
+- **Resistance**: `R = ρ · L / A`, with `A = π·d²/4`.
+- **Temperature** (optional): `R_T = R_20 · (1 + 0.00393 · (T - 20))`.
+
+The computed values agree with published solid-copper AWG tables (for example
+the NIST Copper Wire Tables, Handbook 100) to within about 1 %. Stranded wire
+of the same gauge is a few percent higher, which the default 3 % budget
+absorbs.
+
+Values at 20 °C from `awg_diameter_mm`, `awg_area_mm2` and
+`awg_resistance_ohm_per_1000ft`; the last two columns are
+`voltage_drop(30, 10, awg)` for a 30 A load 10 ft from the battery at 12 V:
+
+| AWG | Diameter (mm) | Area (mm²) | Ω per 1000 ft | Drop at 30 A, 10 ft (V) | Drop at 12 V (%) |
+|---|---|---|---|---|---|
+| 18 | 1.024 | 0.82 | 6.3849 | 3.831 | 31.92 |
+| 16 | 1.291 | 1.31 | 4.0155 | 2.409 | 20.08 |
+| 14 | 1.628 | 2.08 | 2.5254 | 1.515 | 12.63 |
+| 12 | 2.053 | 3.31 | 1.5882 | 0.953 | 7.94 |
+| 10 | 2.588 | 5.26 | 0.9988 | 0.599 | 4.99 |
+| 8 | 3.264 | 8.37 | 0.6282 | 0.377 | 3.14 |
+| 6 | 4.115 | 13.30 | 0.3951 | 0.237 | 1.98 |
+| 4 | 5.189 | 21.15 | 0.2485 | 0.149 | 1.24 |
+| 2 | 6.544 | 33.63 | 0.1563 | 0.094 | 0.78 |
+| 1 | 7.348 | 42.41 | 0.1239 | 0.074 | 0.62 |
+| 1/0 | 8.251 | 53.48 | 0.0983 | 0.059 | 0.49 |
+| 2/0 | 9.266 | 67.43 | 0.0779 | 0.047 | 0.39 |
+| 3/0 | 10.405 | 85.03 | 0.0618 | 0.037 | 0.31 |
+| 4/0 | 11.684 | 107.22 | 0.0490 | 0.029 | 0.25 |
+
+## Worked 12 V example
+
+A compressor draws **30 A** and sits **10 ft** (one way) from the battery in a
+**12 V** system. Budget: **3 %**, which is 0.36 V.
+
+1. Round trip: 2 × 10 = 20 ft of copper.
+2. Try 8 AWG: 0.6282 Ω/1000 ft × 20 ft = 0.012564 Ω; × 30 A = 0.377 V, which is
+   3.14 % of 12 V. Too much.
+3. Try 6 AWG: 0.3951 Ω/1000 ft × 20 ft = 0.007902 Ω; × 30 A = 0.237 V, which is
+   1.98 %. Within budget.
+
+```console
+$ trainhorn-calc wire 30 10
+6 AWG copper: 0.24 V drop (1.98% of 12 V, limit 3%)
+```
+
+```python
+from trainhorn_calc import suggest_awg, voltage_drop
+
+s = suggest_awg(amps=30, one_way_length=10, system_voltage=12)
+s.awg                     # '6'
+s.voltage_drop_v          # 0.23703872341214613
+s.voltage_drop_pct        # 1.9753226951012177
+voltage_drop(30, 10, "8") # 0.3769063337935234  (3.14 %, over budget)
+```
+
+### Variations
+
+```console
+$ trainhorn-calc wire 30 10 --volts 24
+10 AWG copper: 0.60 V drop (2.50% of 24 V, limit 3%)
+
+$ trainhorn-calc wire 30 10 --max-drop 5
+10 AWG copper: 0.60 V drop (4.99% of 12 V, limit 5%)
+
+$ trainhorn-calc wire 30 10 --temp-c 80
+6 AWG copper: 0.29 V drop (2.44% of 12 V, limit 3%)
+
+$ trainhorn-calc wire 15 15
+8 AWG copper: 0.28 V drop (2.36% of 12 V, limit 3%)
+
+$ trainhorn-calc wire 20 3 --unit m
+8 AWG copper: 0.25 V drop (2.06% of 12 V, limit 3%)
+```
+
+- At **24 V** the same current and run need only 10 AWG: the allowed drop in
+  volts doubles.
+- A **hot engine bay** raises resistance. At 80 °C, 6 AWG is 0.4882 Ω per
+  1000 ft instead of 0.3951, and the drop grows from 1.98 % to 2.44 %.
+- Lengths can be in metres with `--unit m` / `unit="m"`.
+
+When no size works:
+
+```console
+$ trainhorn-calc wire 400 50
+error: no gauge up to 4/0 keeps the drop within 3% (400 A over 50 ft); shorten the run, raise the system voltage or use parallel conductors
+```
+
+The command exits with status 2.
+
+## Scope and safety
+
+- This method checks **voltage drop only**. It does not check ampacity
+  (insulation temperature rating, bundling, engine-bay heat).
+- **Size the fuse to protect the wire you choose**, and place it close to the
+  battery.
+- Use the compressor's continuous current draw, not its fuse rating, as `amps`.
+
+## Try it in the browser
+
+The [wire gauge calculator](https://train-horn.com/tools/wire-gauge/) on
+train-horn.com uses the same voltage-drop method in a web page.
