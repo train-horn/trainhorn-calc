@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "trainhorn-calc"
+version = "1.0.0"
+description = "Dependency-free calculators for train horn setups: SPL vs distance, air tank runtime, compressor recovery and copper wire gauge."
+readme = "README.md"
+license = {text = "MIT"}
+authors = [{name = "Train Horn", email = "editorial@train-horn.com"}]
+requires-python = ">=3.8"
+keywords = ["train horn", "decibel", "inverse square law", "air tank", "compressor", "AWG", "voltage drop"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Operating System :: OS Independent",
+    "Intended Audience :: End Users/Desktop",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://train-horn.com/tools/"
+Documentation = "https://train-horn.com/"
+
+[project.scripts]
+trainhorn-calc = "trainhorn_calc.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+trainhorn_calc = ["py.typed"]
