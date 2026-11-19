@@ -22,8 +22,9 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://train-horn.com/tools/"
-Documentation = "https://train-horn.com/"
+Homepage = "https://train-horn.com/"
+Documentation = "https://train-horn.com/tools/"
+Source = "https://github.com/train-horn/trainhorn-calc"
 
 [project.scripts]
 trainhorn-calc = "trainhorn_calc.cli:main"
